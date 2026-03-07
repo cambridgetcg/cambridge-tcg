@@ -1,0 +1,252 @@
+{% comment %}
+  Price History Chart — Displays historical price trend for the current product.
+
+  Installation:
+    1. Shopify Admin → Online Store → Themes → Customize
+    2. Go to Product template → Add section → Custom Liquid
+    3. Paste the contents of this file into the Liquid code box
+    OR
+    1. Shopify Admin → Themes → Edit code → Sections → Add new section
+    2. Name it "price-history" and paste this file's contents
+    3. Add {% raw %}{% section 'price-history' %}{% endraw %} to your product template
+
+  Configuration:
+    Set the "Price History API URL" in section settings to your Lambda Function URL.
+{% endcomment %}
+
+<div
+  id="price-history-{{ section.id }}"
+  class="price-history"
+  data-sku="{{ product.selected_or_first_available_variant.sku }}"
+  data-api="{{ section.settings.api_url }}"
+>
+  <h3 class="price-history__title">{{ section.settings.title }}</h3>
+
+  {%- if product.variants.size > 1 -%}
+    <div class="price-history__variant-select">
+      <label for="price-history-variant-{{ section.id }}">Variant:</label>
+      <select id="price-history-variant-{{ section.id }}">
+        {%- for variant in product.variants -%}
+          <option
+            value="{{ variant.sku }}"
+            {% if variant == product.selected_or_first_available_variant %}selected{% endif %}
+          >
+            {{ variant.title }}
+          </option>
+        {%- endfor -%}
+      </select>
+    </div>
+  {%- endif -%}
+
+  <div class="price-history__range-buttons" id="price-range-{{ section.id }}">
+    <button type="button" data-days="30">30D</button>
+    <button type="button" data-days="90" class="active">90D</button>
+    <button type="button" data-days="365">1Y</button>
+    <button type="button" data-days="0">All</button>
+  </div>
+
+  <div class="price-history__chart-wrap">
+    <canvas id="price-chart-{{ section.id }}"></canvas>
+  </div>
+
+  <p class="price-history__status" id="price-status-{{ section.id }}">Loading price history&hellip;</p>
+</div>
+
+<style>
+  .price-history {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    border: 1px solid var(--color-border, #e5e5e5);
+    border-radius: 8px;
+    background: var(--color-background, #fff);
+  }
+  .price-history__title {
+    margin: 0 0 1rem;
+    font-size: 1.1em;
+  }
+  .price-history__variant-select {
+    margin-bottom: 0.75rem;
+  }
+  .price-history__variant-select select {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--color-border, #ccc);
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .price-history__range-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .price-history__range-buttons button {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--color-border, #ccc);
+    border-radius: 4px;
+    background: transparent;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .price-history__range-buttons button.active {
+    background: var(--color-foreground, #111);
+    color: var(--color-background, #fff);
+    border-color: var(--color-foreground, #111);
+  }
+  .price-history__chart-wrap {
+    position: relative;
+    height: 280px;
+  }
+  .price-history__status {
+    text-align: center;
+    color: #888;
+    font-size: 0.9em;
+    margin: 0.5rem 0 0;
+  }
+  .price-history__status:empty { display: none; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    var container = document.getElementById('price-history-{{ section.id }}');
+    var API_URL = container.dataset.api;
+    var currentSku = container.dataset.sku;
+    var canvas = document.getElementById('price-chart-{{ section.id }}');
+    var statusEl = document.getElementById('price-status-{{ section.id }}');
+    var rangeEl = document.getElementById('price-range-{{ section.id }}');
+    var chart = null;
+    var currentDays = 90;
+
+    if (!API_URL || !currentSku) {
+      statusEl.textContent = 'Price history not configured.';
+      return;
+    }
+
+    /* ---- Fetch + Render ---- */
+    function load(sku, days) {
+      statusEl.textContent = 'Loading\u2026';
+      var url = API_URL.replace(/\/+$/, '') + '/prices?sku=' + encodeURIComponent(sku);
+      if (days > 0) url += '&days=' + days;
+
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.prices || data.prices.length === 0) {
+            statusEl.textContent = 'No price history available.';
+            if (chart) { chart.destroy(); chart = null; }
+            return;
+          }
+
+          var labels = data.prices.map(function (p) { return p.date; });
+          var gbpPrices = data.prices.map(function (p) { return p.selling_price_gbp; });
+
+          if (chart) chart.destroy();
+          chart = new Chart(canvas, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: 'Price (£)',
+                data: gbpPrices,
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                pointHitRadius: 10
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    title: function (items) {
+                      if (!items.length) return '';
+                      var d = items[0].label;
+                      return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'short', year: 'numeric'
+                      });
+                    },
+                    label: function (ctx) {
+                      return ' £' + Number(ctx.raw).toFixed(2);
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  ticks: { maxTicksLimit: 8, maxRotation: 0, font: { size: 11 } },
+                  grid: { display: false }
+                },
+                y: {
+                  ticks: {
+                    callback: function (v) { return '£' + v.toFixed(2); },
+                    font: { size: 11 }
+                  },
+                  grid: { color: 'rgba(0,0,0,0.06)' }
+                }
+              }
+            }
+          });
+
+          statusEl.textContent = '';
+        })
+        .catch(function () {
+          statusEl.textContent = 'Could not load price history.';
+        });
+    }
+
+    /* ---- Range Buttons ---- */
+    rangeEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-days]');
+      if (!btn) return;
+      rangeEl.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentDays = parseInt(btn.dataset.days, 10);
+      load(currentSku, currentDays);
+    });
+
+    /* ---- Variant Selector ---- */
+    var variantSelect = document.getElementById('price-history-variant-{{ section.id }}');
+    if (variantSelect) {
+      variantSelect.addEventListener('change', function () {
+        currentSku = this.value;
+        container.dataset.sku = currentSku;
+        load(currentSku, currentDays);
+      });
+    }
+
+    /* ---- Initial Load ---- */
+    load(currentSku, currentDays);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Price History",
+  "settings": [
+    {
+      "type": "text",
+      "id": "title",
+      "label": "Section Title",
+      "default": "Price History"
+    },
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Price History API URL",
+      "default": "https://0okzxooy36.execute-api.us-east-1.amazonaws.com",
+      "info": "API Gateway URL for the price-history-api Lambda"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Price History"
+    }
+  ]
+}
+{% endschema %}
