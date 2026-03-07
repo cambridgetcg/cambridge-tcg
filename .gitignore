@@ -1,0 +1,30 @@
+# Environment & secrets
+.env
+config/secrets.*
+
+# Zoho exports (may contain sensitive data)
+stock/imports/*.csv
+stock/imports/*.json
+
+# Cache
+pricing/cache/
+stock/count/price_cache.json
+stock/sync/shopify/.shopify_token.json
+
+# Logs
+logs/
+
+# OS
+.DS_Store
+
+# Stock data (business data, not code)
+stock/count/stock_data.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node (Playwright tests)
+node_modules/
+package-lock.json
