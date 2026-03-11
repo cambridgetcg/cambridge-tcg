@@ -30,6 +30,12 @@ REPO_ROOT = os.path.dirname(BASE)
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+# Ensure real 'requests' is imported before mock loop so it isn't shadowed.
+# Without this, if requests hasn't been imported yet, the loop below would
+# replace it with a MagicMock — breaking any test file that later does
+# `from requests.adapters import ...` (e.g. pricing/tests/test_pipeline_e2e.py).
+import requests as _real_requests  # noqa: F401
+
 # Pre-mock external dependencies so Lambda imports don't fail
 for _mod in ['psycopg2', 'psycopg2.extras', 'boto3', 'requests',
              'ebay_auth', 'stock.sync.shopify.auth',
