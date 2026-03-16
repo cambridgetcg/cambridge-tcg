@@ -82,15 +82,14 @@ function renderBuyList(container, opts) {
   html += '<p class="intro">Cards we\'re currently looking to buy. Add cards to your cart and submit a trade-in request \u2014 we offer cash or store credit.</p>';
 
   // Summary stats
-  var cashBuyingFiltered = filtered.filter(function(s) { return s.cash_want > 0; });
   html += '<div class="summary-cards">';
   html += '<div class="summary-card">';
   html += '<div class="summary-card__value">' + filtered.length + '</div>';
-  html += '<div class="summary-card__label">Total Cards</div>';
+  html += '<div class="summary-card__label">Cards We Buy</div>';
   html += '</div>';
   html += '<div class="summary-card">';
-  html += '<div class="summary-card__value">' + cashBuyingFiltered.length + '</div>';
-  html += '<div class="summary-card__label">Buying for Cash</div>';
+  html += '<div class="summary-card__value">\u2728 +15%</div>';
+  html += '<div class="summary-card__label">MINT Bonus</div>';
   html += '</div>';
   html += '</div>';
 
@@ -235,10 +234,9 @@ function renderBuyListTable(items) {
   html += '<thead><tr>';
   html += '<th data-sort="sku" class="sortable">Card' + sortIcon('sku') + '</th>';
   html += '<th class="col-set">Set</th>';
-  html += '<th data-sort="cash" class="sortable">Cash' + sortIcon('cash') + '</th>';
-  html += '<th data-sort="credit" class="sortable">Credit' + sortIcon('credit') + '</th>';
-  html += '<th data-sort="cash_want" class="sortable">Cash Want' + sortIcon('cash_want') + '</th>';
-  html += '<th class="col-credit-want">Credit Want</th>';
+  html += '<th data-sort="cash" class="sortable">Cash (A-)' + sortIcon('cash') + '</th>';
+  html += '<th data-sort="credit" class="sortable">Credit (A-)' + sortIcon('credit') + '</th>';
+  html += '<th class="col-mint">MINT Bonus</th>';
   html += '<th class="col-cart">Add</th>';
   html += '</tr></thead>';
   html += '<tbody>';
@@ -249,18 +247,20 @@ function renderBuyListTable(items) {
     var setName = getSetName(s.set_code);
     var cash = '\u00a3' + s.cash_price.toFixed(2);
     var credit = '\u00a3' + s.credit_price.toFixed(2);
-    var cashWantCls = s.cash_want >= 4 ? 'want-high' : s.cash_want > 0 ? 'want-mid' : 'want-none';
     var inCart = cart[s.sku] ? cart[s.sku].qty : 0;
     var btnText = inCart > 0 ? inCart + ' in cart' : '+';
     var btnCls = 'btn-add-cart' + (inCart > 0 ? ' in-cart' : '');
 
-    html += '<tr data-cash-want="' + s.cash_want + '">';
+    var mintCash = s.mint_cash_price ? '\u00a3' + s.mint_cash_price.toFixed(2) : '';
+    var mintCredit = s.mint_credit_price ? '\u00a3' + s.mint_credit_price.toFixed(2) : '';
+    var mintDisplay = mintCash ? mintCash + ' / ' + mintCredit : '\u2014';
+
+    html += '<tr>';
     html += '<td>' + display + '</td>';
     html += '<td class="col-set"><a href="#/set/' + s.set_code + '" class="set-link">' + s.set_code + '</a> <span class="set-name-hint">' + setName + '</span></td>';
     html += '<td>' + cash + '</td>';
     html += '<td class="credit-price">' + credit + '</td>';
-    html += '<td><span class="want-badge ' + cashWantCls + '">' + s.cash_want + '</span></td>';
-    html += '<td class="col-credit-want"><span class="want-badge want-unlimited">\u221e</span></td>';
+    html += '<td class="col-mint"><span class="mint-badge">' + mintDisplay + '</span></td>';
     html += '<td class="col-cart"><button class="' + btnCls + '" data-sku="' + s.sku + '">' + btnText + '</button></td>';
     html += '</tr>';
   }
@@ -295,10 +295,10 @@ function renderCart(container) {
   html += '<table class="catalog-table cart-table">';
   html += '<thead><tr>';
   html += '<th>Card</th>';
+  html += '<th>Condition</th>';
   html += '<th>Qty</th>';
   html += '<th>Cash Each</th>';
   html += '<th>Credit Each</th>';
-  html += '<th class="col-set">Credit Total</th>';
   html += '<th></th>';
   html += '</tr></thead>';
   html += '<tbody>';
@@ -307,21 +307,38 @@ function renderCart(container) {
   for (var i = 0; i < cartItems.length; i++) {
     var item = cartItems[i];
     var display = formatSkuShort(item.sku);
-    var creditTotal = (item.credit_price * item.qty).toFixed(2);
+    var isMint = item.condition === 'nm' && item.mint_cash_price;
+    var cashUnit = isMint ? item.mint_cash_price : item.cash_price;
+    var creditUnit = isMint ? item.mint_credit_price : item.credit_price;
     totals.count += item.qty;
-    totals.cash += item.cash_price * item.qty;
-    totals.credit += item.credit_price * item.qty;
+    totals.cash += cashUnit * item.qty;
+    totals.credit += creditUnit * item.qty;
+
+    var hasMint = item.mint_cash_price && item.mint_cash_price > item.cash_price;
+    var nmChecked = item.condition === 'nm' ? ' checked' : '';
+    var amChecked = item.condition !== 'nm' ? ' checked' : '';
 
     html += '<tr>';
     html += '<td>' + display + '</td>';
+    html += '<td class="col-condition">';
+    if (hasMint) {
+      html += '<label class="condition-toggle' + (item.condition === 'nm' ? ' active-mint' : '') + '">';
+      html += '<input type="radio" name="cond-' + item.sku + '" value="nm" data-sku="' + item.sku + '"' + nmChecked + '> ';
+      html += '<span class="mint-label">\u2728 MINT (+15%)</span></label> ';
+      html += '<label class="condition-toggle' + (item.condition !== 'nm' ? ' active-am' : '') + '">';
+      html += '<input type="radio" name="cond-' + item.sku + '" value="a-" data-sku="' + item.sku + '"' + amChecked + '> ';
+      html += '<span>A\u2212</span></label>';
+    } else {
+      html += '<span>A\u2212</span>';
+    }
+    html += '</td>';
     html += '<td><div class="qty-control">';
     html += '<button class="qty-btn" data-sku="' + item.sku + '" data-action="dec">\u2212</button>';
     html += '<span class="qty-value">' + item.qty + '</span>';
     html += '<button class="qty-btn" data-sku="' + item.sku + '" data-action="inc">+</button>';
     html += '</div></td>';
-    html += '<td>\u00a3' + item.cash_price.toFixed(2) + '</td>';
-    html += '<td class="credit-price">\u00a3' + item.credit_price.toFixed(2) + '</td>';
-    html += '<td class="col-set credit-price">\u00a3' + creditTotal + '</td>';
+    html += '<td>\u00a3' + cashUnit.toFixed(2) + (isMint ? ' <span class="mint-tag">\u2728</span>' : '') + '</td>';
+    html += '<td class="credit-price">\u00a3' + creditUnit.toFixed(2) + (isMint ? ' <span class="mint-tag">\u2728</span>' : '') + '</td>';
     html += '<td><button class="btn-remove" data-sku="' + item.sku + '">\u2715</button></td>';
     html += '</tr>';
   }
@@ -330,9 +347,9 @@ function renderCart(container) {
   html += '<tfoot><tr class="cart-totals">';
   html += '<td><strong>' + totals.count + ' card' + (totals.count === 1 ? '' : 's') + '</strong></td>';
   html += '<td></td>';
+  html += '<td></td>';
   html += '<td><strong>\u00a3' + totals.cash.toFixed(2) + '</strong></td>';
   html += '<td class="credit-price"><strong>\u00a3' + totals.credit.toFixed(2) + '</strong></td>';
-  html += '<td class="col-set"></td>';
   html += '<td></td>';
   html += '</tr></tfoot>';
   html += '</table>';
@@ -362,6 +379,13 @@ function renderCart(container) {
         Cart.updateQty(sku, newQty);
         renderCart(container);
       }
+      return;
+    }
+
+    // Condition toggle (NM vs A-)
+    if (e.target.type === 'radio' && e.target.getAttribute('data-sku')) {
+      Cart.setCondition(e.target.getAttribute('data-sku'), e.target.value);
+      renderCart(container);
       return;
     }
 
@@ -418,10 +442,11 @@ function renderSubmitForm(container) {
   html += '<legend>Payment Preference</legend>';
   html += '<div class="radio-group">';
   html += '<label class="radio-label"><input type="radio" name="payment" value="credit" checked>';
-  html += ' <strong>Store Credit</strong> \u2014 \u00a3' + totals.credit.toFixed(2) + '</label>';
+  html += ' <strong>Store Credit</strong> — £' + totals.credit.toFixed(2) + '</label>';
   html += '<label class="radio-label"><input type="radio" name="payment" value="cash">';
-  html += ' <strong>Cash</strong> (bank transfer) \u2014 \u00a3' + totals.cash.toFixed(2) + '</label>';
+  html += ' <strong>Cash</strong> (bank transfer) — £' + totals.cash.toFixed(2) + '</label>';
   html += '</div>';
+  html += '<p class="form-note mint-note">✨ MINT condition cards include a +15% bonus. Toggle condition per card in your <a href="#/cart">cart</a>.</p>';
   html += '</fieldset>';
 
   // Delivery method
@@ -490,7 +515,7 @@ function renderSubmitForm(container) {
       notes: document.getElementById('ti-notes').value.trim(),
       website: document.getElementById('ti-website').value,
       items: cartItems.map(function(item) {
-        return { sku: item.sku, quantity: item.qty };
+        return { sku: item.sku, quantity: item.qty, condition: item.condition || 'nm' };
       }),
     };
 

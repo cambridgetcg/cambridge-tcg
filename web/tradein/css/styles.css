@@ -660,3 +660,15 @@ h2.page-title, .page-title {
   .catalog-table th, .catalog-table td { padding: 8px; font-size: 13px; }
   .set-name-hint { display: none; }
 }
+
+/* MINT bonus styling */
+.col-mint { text-align: center; white-space: nowrap; }
+.mint-badge { color: #d4a017; font-weight: 600; font-size: 0.85em; }
+.mint-tag { font-size: 0.8em; }
+.mint-label { color: #d4a017; font-weight: 600; }
+.mint-note { color: #d4a017; font-size: 0.85em; margin-top: 8px; }
+.condition-toggle { display: inline-block; margin-right: 8px; cursor: pointer; font-size: 0.85em; }
+.condition-toggle input[type="radio"] { margin-right: 2px; }
+.condition-toggle.active-mint { background: rgba(212, 160, 23, 0.1); padding: 2px 8px; border-radius: 4px; }
+.condition-toggle.active-am { background: rgba(100, 100, 100, 0.1); padding: 2px 8px; border-radius: 4px; }
+.col-condition { white-space: nowrap; min-width: 140px; }

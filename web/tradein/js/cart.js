@@ -25,8 +25,12 @@ var Cart = {
         sku: item.sku,
         set_code: item.set_code,
         card_number: item.card_number,
+        name: item.name || '',
         cash_price: item.cash_price,
         credit_price: item.credit_price,
+        mint_cash_price: item.mint_cash_price || null,
+        mint_credit_price: item.mint_credit_price || null,
+        condition: 'nm', // default to NM (MINT bonus)
       };
     }
     Cart.set(cart);
@@ -44,6 +48,14 @@ var Cart = {
       delete cart[sku];
     } else if (cart[sku]) {
       cart[sku].qty = qty;
+    }
+    Cart.set(cart);
+  },
+
+  setCondition: function(sku, condition) {
+    var cart = Cart.get();
+    if (cart[sku]) {
+      cart[sku].condition = condition; // 'nm' or 'a-'
     }
     Cart.set(cart);
   },
@@ -66,8 +78,11 @@ var Cart = {
     for (var key in cart) {
       var item = cart[key];
       count += item.qty;
-      cash += item.cash_price * item.qty;
-      credit += item.credit_price * item.qty;
+      var useMint = item.condition === 'nm' && item.mint_cash_price;
+      var cashUnit = useMint ? item.mint_cash_price : item.cash_price;
+      var creditUnit = useMint ? item.mint_credit_price : item.credit_price;
+      cash += cashUnit * item.qty;
+      credit += creditUnit * item.qty;
     }
     return { count: count, cash: cash, credit: credit };
   },
@@ -93,8 +108,8 @@ var Cart = {
         var totals = Cart.totals();
         bar.querySelector('.cart-bar__text').textContent =
           totals.count + ' card' + (totals.count === 1 ? '' : 's') +
-          ' \u2014 Cash: \u00a3' + totals.cash.toFixed(2) +
-          ' / Credit: \u00a3' + totals.credit.toFixed(2);
+          ' — Cash: £' + totals.cash.toFixed(2) +
+          ' / Credit: £' + totals.credit.toFixed(2);
         bar.style.display = '';
       } else {
         bar.style.display = 'none';
