@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prices.cambridgetcg.com/sitemap.xml
