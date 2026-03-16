@@ -121,7 +121,7 @@ function renderBuyList(container, opts) {
   html += '<h2 class="page-title">' + pageTitle + '</h2>';
   html += '<span class="count">' + filtered.length + ' cards</span>';
   html += '</div>';
-  html += '<label class="toggle-label"><input type="checkbox" id="buying-only"' + (showBuyingOnly ? ' checked' : '') + '> Show buying only</label>';
+  // All cards are buyable — no toggle needed
   html += '</div>';
 
   // Table
@@ -135,27 +135,18 @@ function renderBuyList(container, opts) {
 
   container.innerHTML = html;
 
-  // Event: search
+  // Event: search (safe — new input element each render, so no duplicate)
   var searchInput = document.getElementById('search-input');
   searchInput.addEventListener('input', function() {
     var q = this.value.trim().toLowerCase();
     var rows = container.querySelectorAll('tbody tr');
     for (var i = 0; i < rows.length; i++) {
       var text = rows[i].textContent.toLowerCase();
-      var matchesSearch = text.indexOf(q) >= 0;
-      var isCashBuying = rows[i].getAttribute('data-cash-want') !== '0';
-      rows[i].style.display = matchesSearch && (!showBuyingOnly || isCashBuying) ? '' : 'none';
+      rows[i].style.display = (!q || text.indexOf(q) >= 0) ? '' : 'none';
     }
   });
 
-  // Event: buying-only toggle (filters on cash want)
-  var toggle = document.getElementById('buying-only');
-  toggle.addEventListener('change', function() {
-    showBuyingOnly = this.checked;
-    applyVisibility(container);
-  });
-
-  // Event: sortable headers
+  // Event: sortable headers (safe — new th elements each render)
   var headers = container.querySelectorAll('th[data-sort]');
   for (var i = 0; i < headers.length; i++) {
     headers[i].addEventListener('click', function() {
@@ -170,24 +161,30 @@ function renderBuyList(container, opts) {
     });
   }
 
-  // Event: add-to-cart buttons
-  container.addEventListener('click', function(e) {
-    var btn = e.target.closest('.btn-add-cart');
-    if (!btn) return;
-    var sku = btn.getAttribute('data-sku');
-    var item = null;
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].sku === sku) { item = items[i]; break; }
-    }
-    if (item) {
-      Cart.add(item);
-      // Update button text
-      var cart = Cart.get();
-      var inCart = cart[sku] ? cart[sku].qty : 0;
-      btn.textContent = inCart > 0 ? inCart + ' in cart' : '+';
-      btn.classList.toggle('in-cart', inCart > 0);
-    }
-  });
+  // Event: add-to-cart buttons (use a named handler to prevent duplicate listeners)
+  if (!container._cartClickHandler) {
+    container._cartClickHandler = function(e) {
+      var btn = e.target.closest('.btn-add-cart');
+      if (!btn) return;
+      var sku = btn.getAttribute('data-sku');
+      // Find item from current buylist data
+      var item = null;
+      if (buylistData && buylistData.items) {
+        for (var i = 0; i < buylistData.items.length; i++) {
+          if (buylistData.items[i].sku === sku) { item = buylistData.items[i]; break; }
+        }
+      }
+      if (item) {
+        Cart.add(item);
+        // Update button text
+        var cart = Cart.get();
+        var inCart = cart[sku] ? cart[sku].qty : 0;
+        btn.textContent = inCart > 0 ? inCart + ' in cart' : '+';
+        btn.classList.toggle('in-cart', inCart > 0);
+      }
+    };
+    container.addEventListener('click', container._cartClickHandler);
+  }
 
   // Apply initial visibility + cart badge
   applyVisibility(container);
@@ -203,9 +200,7 @@ function applyVisibility(container) {
   var rows = container.querySelectorAll('tbody tr');
   for (var i = 0; i < rows.length; i++) {
     var text = rows[i].textContent.toLowerCase();
-    var matchesSearch = !q || text.indexOf(q) >= 0;
-    var isCashBuying = rows[i].getAttribute('data-cash-want') !== '0';
-    rows[i].style.display = matchesSearch && (!showBuyingOnly || isCashBuying) ? '' : 'none';
+    rows[i].style.display = (!q || text.indexOf(q) >= 0) ? '' : 'none';
   }
 }
 
