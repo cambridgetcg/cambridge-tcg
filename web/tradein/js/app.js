@@ -79,7 +79,8 @@ function renderBuyList(container, opts) {
   var html = '';
 
   // Intro
-  html += '<p class="intro">Cards we\'re currently looking to buy. Add cards to your cart and submit a trade-in request \u2014 we offer cash or store credit.</p>';
+  html += '<p class="intro">Cards we\'re currently looking to buy. All prices shown are for <strong>Near Mint (NM)</strong> condition. We offer cash or store credit.</p>';
+  html += '<p class="intro mint-intro">\u2728 <strong>MINT Bonus:</strong> Cards assessed as Mint condition by Cambridge TCG may receive an additional +15% bonus on top of the NM price. This bonus is at our discretion and should be viewed as a reward for exceptional condition.</p>';
 
   // Summary stats
   html += '<div class="summary-cards">';
@@ -229,9 +230,9 @@ function renderBuyListTable(items) {
   html += '<thead><tr>';
   html += '<th data-sort="sku" class="sortable">Card' + sortIcon('sku') + '</th>';
   html += '<th class="col-set">Set</th>';
-  html += '<th data-sort="cash" class="sortable">Cash (A-)' + sortIcon('cash') + '</th>';
-  html += '<th data-sort="credit" class="sortable">Credit (A-)' + sortIcon('credit') + '</th>';
-  html += '<th class="col-mint">MINT Bonus</th>';
+  html += '<th data-sort="cash" class="sortable">Cash (NM)' + sortIcon('cash') + '</th>';
+  html += '<th data-sort="credit" class="sortable">Credit (NM)' + sortIcon('credit') + '</th>';
+  html += '<th class="col-mint">\u2728 MINT Bonus</th>';
   html += '<th class="col-cart">Add</th>';
   html += '</tr></thead>';
   html += '<tbody>';
@@ -246,9 +247,10 @@ function renderBuyListTable(items) {
     var btnText = inCart > 0 ? inCart + ' in cart' : '+';
     var btnCls = 'btn-add-cart' + (inCart > 0 ? ' in-cart' : '');
 
-    var mintCash = s.mint_cash_price ? '\u00a3' + s.mint_cash_price.toFixed(2) : '';
-    var mintCredit = s.mint_credit_price ? '\u00a3' + s.mint_credit_price.toFixed(2) : '';
-    var mintDisplay = mintCash ? mintCash + ' / ' + mintCredit : '\u2014';
+    // MINT bonus: show the extra amount on top of NM price
+    var mintBonusCash = (s.mint_cash_price && s.mint_cash_price > s.cash_price) ? (s.mint_cash_price - s.cash_price) : 0;
+    var mintBonusCredit = (s.mint_credit_price && s.mint_credit_price > s.credit_price) ? (s.mint_credit_price - s.credit_price) : 0;
+    var mintDisplay = mintBonusCash > 0 ? '+\u00a3' + mintBonusCash.toFixed(2) : '\u2014';
 
     html += '<tr>';
     html += '<td>' + display + '</td>';
@@ -290,10 +292,10 @@ function renderCart(container) {
   html += '<table class="catalog-table cart-table">';
   html += '<thead><tr>';
   html += '<th>Card</th>';
-  html += '<th>Condition</th>';
   html += '<th>Qty</th>';
-  html += '<th>Cash Each</th>';
-  html += '<th>Credit Each</th>';
+  html += '<th>Cash (NM)</th>';
+  html += '<th>Credit (NM)</th>';
+  html += '<th>\u2728 MINT Bonus</th>';
   html += '<th></th>';
   html += '</tr></thead>';
   html += '<tbody>';
@@ -302,38 +304,27 @@ function renderCart(container) {
   for (var i = 0; i < cartItems.length; i++) {
     var item = cartItems[i];
     var display = formatSkuShort(item.sku);
-    var isMint = item.condition === 'nm' && item.mint_cash_price;
-    var cashUnit = isMint ? item.mint_cash_price : item.cash_price;
-    var creditUnit = isMint ? item.mint_credit_price : item.credit_price;
+    // Always use NM prices as the base
+    var cashUnit = item.cash_price;
+    var creditUnit = item.credit_price;
     totals.count += item.qty;
     totals.cash += cashUnit * item.qty;
     totals.credit += creditUnit * item.qty;
 
-    var hasMint = item.mint_cash_price && item.mint_cash_price > item.cash_price;
-    var nmChecked = item.condition === 'nm' ? ' checked' : '';
-    var amChecked = item.condition !== 'nm' ? ' checked' : '';
+    // MINT bonus is extra, shown separately
+    var mintBonusCash = (item.mint_cash_price && item.mint_cash_price > item.cash_price) ? (item.mint_cash_price - item.cash_price) : 0;
+    var mintBonusDisplay = mintBonusCash > 0 ? '+\u00a3' + mintBonusCash.toFixed(2) : '\u2014';
 
     html += '<tr>';
     html += '<td>' + display + '</td>';
-    html += '<td class="col-condition">';
-    if (hasMint) {
-      html += '<label class="condition-toggle' + (item.condition === 'nm' ? ' active-mint' : '') + '">';
-      html += '<input type="radio" name="cond-' + item.sku + '" value="nm" data-sku="' + item.sku + '"' + nmChecked + '> ';
-      html += '<span class="mint-label">\u2728 MINT (+15%)</span></label> ';
-      html += '<label class="condition-toggle' + (item.condition !== 'nm' ? ' active-am' : '') + '">';
-      html += '<input type="radio" name="cond-' + item.sku + '" value="a-" data-sku="' + item.sku + '"' + amChecked + '> ';
-      html += '<span>A\u2212</span></label>';
-    } else {
-      html += '<span>A\u2212</span>';
-    }
-    html += '</td>';
     html += '<td><div class="qty-control">';
     html += '<button class="qty-btn" data-sku="' + item.sku + '" data-action="dec">\u2212</button>';
     html += '<span class="qty-value">' + item.qty + '</span>';
     html += '<button class="qty-btn" data-sku="' + item.sku + '" data-action="inc">+</button>';
     html += '</div></td>';
-    html += '<td>\u00a3' + cashUnit.toFixed(2) + (isMint ? ' <span class="mint-tag">\u2728</span>' : '') + '</td>';
-    html += '<td class="credit-price">\u00a3' + creditUnit.toFixed(2) + (isMint ? ' <span class="mint-tag">\u2728</span>' : '') + '</td>';
+    html += '<td>\u00a3' + cashUnit.toFixed(2) + '</td>';
+    html += '<td class="credit-price">\u00a3' + creditUnit.toFixed(2) + '</td>';
+    html += '<td class="col-mint"><span class="mint-badge">' + mintBonusDisplay + '</span></td>';
     html += '<td><button class="btn-remove" data-sku="' + item.sku + '">\u2715</button></td>';
     html += '</tr>';
   }
@@ -342,12 +333,13 @@ function renderCart(container) {
   html += '<tfoot><tr class="cart-totals">';
   html += '<td><strong>' + totals.count + ' card' + (totals.count === 1 ? '' : 's') + '</strong></td>';
   html += '<td></td>';
-  html += '<td></td>';
   html += '<td><strong>\u00a3' + totals.cash.toFixed(2) + '</strong></td>';
   html += '<td class="credit-price"><strong>\u00a3' + totals.credit.toFixed(2) + '</strong></td>';
   html += '<td></td>';
+  html += '<td></td>';
   html += '</tr></tfoot>';
   html += '</table>';
+  html += '<p class="form-note mint-intro">\u2728 <strong>MINT Bonus:</strong> If your cards are assessed as Mint condition by Cambridge TCG, you may receive up to +15% on top of the NM prices shown above. This bonus is at our discretion and should be viewed as a reward for exceptional condition.</p>';
 
   if (totals.credit < 5.0) {
     html += '<p class="form-note">\u26a0 Minimum trade-in value is \u00a35.00 (credit). Add more cards to proceed.</p>';
@@ -411,7 +403,7 @@ function renderSubmitForm(container) {
   var html = '';
 
   html += '<h2 class="page-title">Submit Trade-In</h2>';
-  html += '<p class="intro">Review your details and submit your trade-in request. Prices are locked for 7 days from submission.</p>';
+  html += '<p class="intro">Review your details and submit your trade-in request. NM prices are locked for 7 days from submission. MINT bonus (if applicable) will be assessed when we receive your cards.</p>';
 
   html += '<form id="tradein-form" class="tradein-form">';
 
@@ -437,11 +429,11 @@ function renderSubmitForm(container) {
   html += '<legend>Payment Preference</legend>';
   html += '<div class="radio-group">';
   html += '<label class="radio-label"><input type="radio" name="payment" value="credit" checked>';
-  html += ' <strong>Store Credit</strong> — £' + totals.credit.toFixed(2) + '</label>';
+  html += ' <strong>Store Credit</strong> \u2014 \u00a3' + totals.credit.toFixed(2) + ' (NM)</label>';
   html += '<label class="radio-label"><input type="radio" name="payment" value="cash">';
-  html += ' <strong>Cash</strong> (bank transfer) — £' + totals.cash.toFixed(2) + '</label>';
+  html += ' <strong>Cash</strong> (bank transfer) \u2014 \u00a3' + totals.cash.toFixed(2) + ' (NM)</label>';
   html += '</div>';
-  html += '<p class="form-note mint-note">✨ MINT condition cards include a +15% bonus. Toggle condition per card in your <a href="#/cart">cart</a>.</p>';
+  html += '<p class="form-note mint-note">\u2728 Cards assessed as Mint condition by Cambridge TCG may receive an additional +15% bonus on top of these NM prices.</p>';
   html += '</fieldset>';
 
   // Delivery method
@@ -459,7 +451,7 @@ function renderSubmitForm(container) {
   html += '<fieldset>';
   html += '<legend>Declarations</legend>';
   html += '<label class="checkbox-label"><input type="checkbox" id="ti-condition" required>';
-  html += ' I confirm all cards are in Near Mint condition</label>';
+  html += ' I confirm all cards are at least Near Mint (NM) condition</label>';
   html += '<label class="checkbox-label"><input type="checkbox" id="ti-age" required>';
   html += ' I am 18 or over, or a parent/guardian is submitting on my behalf</label>';
   html += '</fieldset>';
@@ -561,7 +553,7 @@ function renderConfirmation(container, reference) {
     html += '<div class="confirm-row"><span class="confirm-label">Reference</span><span class="confirm-value">' + reference + '</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Items</span><span class="confirm-value">' + c.item_count + ' cards</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Payment</span><span class="confirm-value">' + paymentLabel + '</span></div>';
-    html += '<div class="confirm-row"><span class="confirm-label">Total</span><span class="confirm-value confirm-total">\u00a3' + chosenTotal.toFixed(2) + '</span></div>';
+    html += '<div class="confirm-row"><span class="confirm-label">Total (NM)</span><span class="confirm-value confirm-total">\u00a3' + chosenTotal.toFixed(2) + '</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Delivery</span><span class="confirm-value">' + deliveryLabel + '</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Quote Valid Until</span><span class="confirm-value">' + formatDate(c.expires_at) + '</span></div>';
     html += '</div>';
@@ -570,7 +562,7 @@ function renderConfirmation(container, reference) {
     if (c._items && c._items.length > 0) {
       html += '<h3>Items</h3>';
       html += '<table class="catalog-table">';
-      html += '<thead><tr><th>Card</th><th>Qty</th><th>Cash</th><th>Credit</th></tr></thead>';
+      html += '<thead><tr><th>Card</th><th>Qty</th><th>Cash (NM)</th><th>Credit (NM)</th></tr></thead>';
       html += '<tbody>';
       for (var i = 0; i < c._items.length; i++) {
         var item = c._items[i];
@@ -582,6 +574,7 @@ function renderConfirmation(container, reference) {
         html += '</tr>';
       }
       html += '</tbody></table>';
+      html += '<p class="form-note mint-note">\u2728 Prices shown are NM (Near Mint). Cards assessed as Mint condition by Cambridge TCG may receive an additional +15% bonus.</p>';
     }
 
     // Instructions
@@ -633,10 +626,14 @@ function renderTerms(container) {
 
   html += '<h3>Condition Requirements</h3>';
   html += '<ul>';
-  html += '<li><strong>Near Mint (NM)</strong>: Listed price. No visible wear, clean edges, no bends.</li>';
-  html += '<li><strong>Lightly Played (LP)</strong>: 75% of listed price. Minor edge wear, light scratches.</li>';
+  html += '<li><strong>Near Mint (NM)</strong>: Listed price. No visible wear, clean edges, no bends, no scratches.</li>';
+  html += '<li><strong>Lightly Played (LP)</strong>: 75% of listed NM price. Minor edge wear, light scratches.</li>';
   html += '<li><strong>Below LP</strong>: Not accepted for mail-in. In-store: at staff discretion.</li>';
   html += '</ul>';
+
+  html += '<h3>\u2728 MINT Bonus</h3>';
+  html += '<p>Cards assessed as <strong>Mint condition</strong> by Cambridge TCG may receive an additional <strong>+15%</strong> on top of the NM price. This bonus is determined entirely at our discretion based on our assessment of the card\u2019s condition. It should be viewed as a reward for exceptional condition, not a guaranteed rate.</p>';
+  html += '<p>Mint means: factory-fresh appearance, no handling marks, perfect centering, no whitening, no surface imperfections. We assess this in person when your cards arrive.</p>';
 
   html += '<h3>Minimum Values</h3>';
   html += '<p>Mail-in: minimum \u00a35.00 total credit value. In-store: no minimum.</p>';

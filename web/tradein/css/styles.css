@@ -672,3 +672,4 @@ h2.page-title, .page-title {
 .condition-toggle.active-mint { background: rgba(212, 160, 23, 0.1); padding: 2px 8px; border-radius: 4px; }
 .condition-toggle.active-am { background: rgba(100, 100, 100, 0.1); padding: 2px 8px; border-radius: 4px; }
 .col-condition { white-space: nowrap; min-width: 140px; }
+.mint-intro { background: rgba(212, 160, 23, 0.08); border-left: 3px solid #d4a017; padding: 10px 16px; border-radius: 4px; font-size: 0.9em; }

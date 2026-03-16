@@ -78,11 +78,9 @@ var Cart = {
     for (var key in cart) {
       var item = cart[key];
       count += item.qty;
-      var useMint = item.condition === 'nm' && item.mint_cash_price;
-      var cashUnit = useMint ? item.mint_cash_price : item.cash_price;
-      var creditUnit = useMint ? item.mint_credit_price : item.credit_price;
-      cash += cashUnit * item.qty;
-      credit += creditUnit * item.qty;
+      // Always use NM prices. MINT bonus is discretionary, added by Cambridge TCG after assessment.
+      cash += item.cash_price * item.qty;
+      credit += item.credit_price * item.qty;
     }
     return { count: count, cash: cash, credit: credit };
   },
