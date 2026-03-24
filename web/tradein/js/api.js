@@ -3,7 +3,7 @@
  * Uses sessionStorage for caching within a browser session.
  */
 // Worker API — handles trade-in submissions
-const API_BASE = 'https://tradein-api.axiepro.workers.dev';
+const API_BASE = 'https://tradein-api.cambridgetcg.com';
 const CACHE_KEY = 'ctcg_buylist_v4';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const FETCH_TIMEOUT = 15000; // 15 seconds
