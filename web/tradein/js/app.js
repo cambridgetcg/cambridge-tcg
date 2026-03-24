@@ -259,7 +259,8 @@ function renderBuyListTable(items) {
       var fallback = s.image_fallback
         ? "this.src='" + s.image_fallback.replace(/'/g, "\\'") + "';this.onerror=function(){this.style.display='none'};"
         : "this.style.display='none';";
-      thumbHtml = '<img class="card-thumb" src="' + s.image_url + '" alt="' + display + '" loading="lazy" onerror="' + fallback + '">';
+      var fbAttr = s.image_fallback ? ' data-fallback="' + s.image_fallback.replace(/"/g, '&quot;') + '"' : '';
+      thumbHtml = '<img class="card-thumb" src="' + s.image_url + '" alt="' + display + '" loading="lazy"' + fbAttr + ' onerror="' + fallback + '">';
     }
 
     html += '<tr>';
@@ -816,3 +817,68 @@ function formatDate(dateStr) {
   var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
 }
+
+
+// ── Card Image Lightbox ────────────────────────────────────────────
+(function() {
+  var overlay, lbImg, lbLabel;
+
+  function createLightbox() {
+    overlay = document.createElement('div');
+    overlay.className = 'card-lightbox';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML =
+      '<div class="card-lightbox__inner">' +
+        '<button class="card-lightbox__close" aria-label="Close">\u00d7</button>' +
+        '<img class="card-lightbox__img" src="" alt="">' +
+        '<div class="card-lightbox__label"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    lbImg   = overlay.querySelector('.card-lightbox__img');
+    lbLabel = overlay.querySelector('.card-lightbox__label');
+
+    // Close on overlay background click
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeLightbox();
+    });
+
+    // Close button
+    overlay.querySelector('.card-lightbox__close').addEventListener('click', closeLightbox);
+
+    // Esc key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeLightbox();
+    });
+  }
+
+  function openLightbox(src, fallback, label) {
+    if (!overlay) createLightbox();
+    lbImg.src = src;
+    lbImg.alt = label || '';
+    lbLabel.textContent = label || '';
+    lbImg.onerror = fallback
+      ? function() { lbImg.src = fallback; lbImg.onerror = null; }
+      : null;
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+    lbImg.src = '';
+  }
+
+  // Delegate clicks on .card-thumb anywhere in the document
+  document.addEventListener('click', function(e) {
+    var thumb = e.target.closest ? e.target.closest('.card-thumb') : null;
+    if (!thumb) return;
+    var src      = thumb.getAttribute('src');
+    var fallback = thumb.dataset.fallback || '';
+    var label    = thumb.getAttribute('alt') || '';
+    if (src) openLightbox(src, fallback, label);
+  });
+})();
