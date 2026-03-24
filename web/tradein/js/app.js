@@ -228,6 +228,7 @@ function renderBuyListTable(items) {
 
   var html = '<table class="catalog-table">';
   html += '<thead><tr>';
+  html += '<th class="col-thumb"></th>';
   html += '<th data-sort="sku" class="sortable">Card' + sortIcon('sku') + '</th>';
   html += '<th class="col-set">Set</th>';
   html += '<th data-sort="cash" class="sortable">Cash (NM)' + sortIcon('cash') + '</th>';
@@ -252,7 +253,17 @@ function renderBuyListTable(items) {
     var mintBonusCredit = (s.mint_credit_price && s.mint_credit_price > s.credit_price) ? (s.mint_credit_price - s.credit_price) : 0;
     var mintDisplay = mintBonusCash > 0 ? '+\u00a3' + mintBonusCash.toFixed(2) : '\u2014';
 
+    // Card thumbnail: S3 primary, CardRush fallback, blank on final error
+    var thumbHtml = '';
+    if (s.image_url) {
+      var fallback = s.image_fallback
+        ? "this.src='" + s.image_fallback.replace(/'/g, "\\'") + "';this.onerror=function(){this.style.display='none'};"
+        : "this.style.display='none';";
+      thumbHtml = '<img class="card-thumb" src="' + s.image_url + '" alt="' + display + '" loading="lazy" onerror="' + fallback + '">';
+    }
+
     html += '<tr>';
+    html += '<td class="col-thumb">' + thumbHtml + '</td>';
     html += '<td>' + display + '</td>';
     html += '<td class="col-set"><a href="#/set/' + s.set_code + '" class="set-link">' + s.set_code + '</a> <span class="set-name-hint">' + setName + '</span></td>';
     html += '<td>' + cash + '</td>';

@@ -60,6 +60,7 @@ const BuyListAPI = {
           cash_want: 99, // always buying for trade-in
           credit_want: 99,
           image_url: c.imageUrl,
+          image_fallback: c.imageFallback || '',
           cardrush_url: c.cardrushUrl,
           wholesale_price: c.wholesalePrice,
           stock: c.stock,

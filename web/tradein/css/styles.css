@@ -230,6 +230,22 @@ h2.page-title, .page-title {
 .catalog-table tbody tr:last-child td { border-bottom: none; }
 .catalog-table tbody tr:hover { background: #f9fafb; }
 
+/* Card thumbnail column */
+.col-thumb {
+  width: 48px;
+  padding: 4px 6px !important;
+  text-align: center;
+}
+.card-thumb {
+  width: 40px;
+  height: auto;
+  border-radius: 3px;
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  background: #f0f0f0;
+}
+
 .set-link { font-weight: 500; }
 .set-name-hint { color: var(--text-muted); font-size: 12px; }
 .credit-price { font-weight: 600; color: var(--green); }
@@ -649,7 +665,8 @@ h2.page-title, .page-title {
   .summary-card__value { font-size: 22px; }
 
   .catalog-table .col-set,
-  .catalog-table .col-credit-want {
+  .catalog-table .col-credit-want,
+  .catalog-table .col-thumb {
     display: none;
   }
 

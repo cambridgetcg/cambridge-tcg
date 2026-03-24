@@ -166,6 +166,10 @@ def build_buylist():
             # Use wholesale SKU
             sku = card.get("sku", f"OP-{cn}-JP{'-P' if is_p else ''}")
 
+            # S3 image URL (primary) — jp-op-photos bucket
+            # Pattern: Official/{SET}/{CARD_NUMBER}.png  (works for regular + SP cards)
+            s3_image_url = f"https://jp-op-photos.s3.us-east-1.amazonaws.com/Official/{prefix}/{cn}.png"
+
             all_cards.append({
                 "sku": sku,
                 "cardNumber": cn,
@@ -181,7 +185,8 @@ def build_buylist():
                 "creditPrice": credit_price,
                 "mintCashPrice": mint_cash,
                 "mintCreditPrice": mint_credit,
-                "imageUrl": card.get("imageUrl", ""),
+                "imageUrl": s3_image_url,
+                "imageFallback": card.get("imageUrl", ""),  # CardRush URL as fallback
                 "cardrushUrl": card.get("cardrushUrl", ""),
                 "wholesalePrice": round(card.get("pricing", {}).get("price", 0), 2),
                 "stock": card.get("stock", 0),
