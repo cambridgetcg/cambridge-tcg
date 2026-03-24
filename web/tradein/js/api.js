@@ -2,10 +2,8 @@
  * API client for Buy List endpoint.
  * Uses sessionStorage for caching within a browser session.
  */
-// v2: Use local buylist data (CardRush A- prices → GBP)
-// Worker API at tradein-api.cambridgetcg.workers.dev (once deployed)
-// Fallback: serve buylist.json from same origin
-const API_BASE = '';
+// Worker API — handles trade-in submissions
+const API_BASE = 'https://tradein-api.axiepro.workers.dev';
 const CACHE_KEY = 'ctcg_buylist_v4';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const FETCH_TIMEOUT = 15000; // 15 seconds

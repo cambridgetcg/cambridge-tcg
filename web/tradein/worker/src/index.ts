@@ -16,13 +16,14 @@ export interface Env {
   BUYLIST: KVNamespace;
   SUBMISSIONS: KVNamespace;
   STORE_EMAIL: string;
+  ADMIN_SECRET: string;
 }
 
 // ── CORS headers ──────────────────────────────────────────
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Admin-Secret",
 };
 
 function json(data: unknown, status = 200): Response {
@@ -63,7 +64,7 @@ export default {
       }
 
       // GET /tradein/:ref?email=
-      const statusMatch = path.match(/^\/tradein\/(TI-\w+)$/);
+      const statusMatch = path.match(/^\/tradein\/(TI-[\w-]+)$/);
       if (request.method === "GET" && statusMatch) {
         const ref = statusMatch[1];
         const email = url.searchParams.get("email") || "";
@@ -71,9 +72,39 @@ export default {
       }
 
       // POST /tradein/:ref/cancel
-      const cancelMatch = path.match(/^\/tradein\/(TI-\w+)\/cancel$/);
+      const cancelMatch = path.match(/^\/tradein\/(TI-[\w-]+)\/cancel$/);
       if (request.method === "POST" && cancelMatch) {
         return handleCancel(cancelMatch[1], request, env);
+      }
+
+      // ── Admin endpoints (require X-Admin-Secret header) ──
+      const adminSecret = request.headers.get("X-Admin-Secret");
+      const isAdmin = adminSecret && adminSecret === env.ADMIN_SECRET;
+
+      // GET /admin/submissions?date=YYYY-MM-DD
+      if (request.method === "GET" && path === "/admin/submissions") {
+        if (!isAdmin) return json({ error: "Unauthorized" }, 401);
+        return handleAdminList(request, env);
+      }
+
+      // GET /admin/submission/:ref
+      const adminGetMatch = path.match(/^\/admin\/submission\/(TI-[\w-]+)$/);
+      if (request.method === "GET" && adminGetMatch) {
+        if (!isAdmin) return json({ error: "Unauthorized" }, 401);
+        return handleAdminGet(adminGetMatch[1], env);
+      }
+
+      // PATCH /admin/submission/:ref — update status / adjust items / prices
+      const adminPatchMatch = path.match(/^\/admin\/submission\/(TI-[\w-]+)$/);
+      if (request.method === "PATCH" && adminPatchMatch) {
+        if (!isAdmin) return json({ error: "Unauthorized" }, 401);
+        return handleAdminPatch(adminPatchMatch[1], request, env);
+      }
+
+      // Debug KV (REMOVE IN PROD)
+      if (request.method === "GET" && path.startsWith("/debug/kv/")) {
+        const key = decodeURIComponent(path.replace("/debug/kv/", ""));
+        return handleDebugKV(key, env);
       }
 
       // Health check
@@ -171,9 +202,8 @@ async function handleSubmitTradeIn(request: Request, env: Env): Promise<Response
     }
 
     // Use MINT price if condition is NM, otherwise A- price
-    const useMint = item.condition === "nm";
-    const cashUnit = useMint && card.mintCashPrice ? card.mintCashPrice : card.cashPrice;
-    const creditUnit = useMint && card.mintCreditPrice ? card.mintCreditPrice : card.creditPrice;
+    const cashUnit = card.cashPrice;
+    const creditUnit = card.creditPrice;
 
     validatedItems.push({
       sku: item.sku,
@@ -327,4 +357,101 @@ async function handleCancel(ref: string, request: Request, env: Env): Promise<Re
   });
 
   return json({ reference: ref, status: "cancelled" });
+}
+
+// ── GET /admin/submissions ────────────────────────────────
+async function handleAdminList(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+
+  // List all submissions for the date
+  const indexKey = `index:${date}`;
+  const index = JSON.parse((await env.SUBMISSIONS.get(indexKey)) || "[]");
+
+  // Also scan for any refs not in the index (e.g. from other dates)
+  const status = url.searchParams.get("status");
+  const results = status ? index.filter((s: any) => s.status === status) : index;
+
+  return json({ date, count: results.length, submissions: results });
+}
+
+// ── GET /admin/submission/:ref ────────────────────────────
+async function handleAdminGet(ref: string, env: Env): Promise<Response> {
+  const data = await env.SUBMISSIONS.get(ref, "text");
+  if (!data) return json({ error: "Not found" }, 404);
+  return json(JSON.parse(data));
+}
+
+// ── PATCH /admin/submission/:ref ──────────────────────────
+interface AdminPatch {
+  status?: "submitted" | "received" | "accepted" | "paid" | "rejected" | "cancelled";
+  items?: Array<{
+    sku: string;
+    quantity?: number;       // 0 = remove item
+    cashUnitPrice?: number;  // override price
+    creditUnitPrice?: number;
+  }>;
+  adminNote?: string;
+  trackingNumber?: string;
+  paymentReference?: string;
+}
+
+async function handleAdminPatch(ref: string, request: Request, env: Env): Promise<Response> {
+  const data = await env.SUBMISSIONS.get(ref, "text");
+  if (!data) return json({ error: "Not found" }, 404);
+
+  const submission = JSON.parse(data);
+  const patch: AdminPatch = await request.json();
+
+  // Update status
+  if (patch.status) submission.status = patch.status;
+  if (patch.adminNote !== undefined) submission.adminNote = patch.adminNote;
+  if (patch.trackingNumber !== undefined) submission.trackingNumber = patch.trackingNumber;
+  if (patch.paymentReference !== undefined) submission.paymentReference = patch.paymentReference;
+
+  // Adjust items
+  if (patch.items?.length) {
+    for (const itemPatch of patch.items) {
+      const idx = submission.items.findIndex((i: any) => i.sku === itemPatch.sku);
+      if (idx === -1) continue;
+
+      if (itemPatch.quantity === 0) {
+        // Remove item
+        submission.items.splice(idx, 1);
+      } else {
+        const item = submission.items[idx];
+        if (itemPatch.quantity !== undefined) item.quantity = itemPatch.quantity;
+        if (itemPatch.cashUnitPrice !== undefined) item.cashUnitPrice = itemPatch.cashUnitPrice;
+        if (itemPatch.creditUnitPrice !== undefined) item.creditUnitPrice = itemPatch.creditUnitPrice;
+        // Recalculate subtotals
+        item.cashSubtotal = Math.round(item.cashUnitPrice * item.quantity * 100) / 100;
+        item.creditSubtotal = Math.round(item.creditUnitPrice * item.quantity * 100) / 100;
+        item.adminAdjusted = true;
+        submission.items[idx] = item;
+      }
+    }
+
+    // Recalculate totals
+    submission.finalCashTotal = Math.round(
+      submission.items.reduce((s: number, i: any) => s + i.cashSubtotal, 0) * 100
+    ) / 100;
+    submission.finalCreditTotal = Math.round(
+      submission.items.reduce((s: number, i: any) => s + i.creditSubtotal, 0) * 100
+    ) / 100;
+  }
+
+  submission.updatedAt = new Date().toISOString();
+
+  await env.SUBMISSIONS.put(ref, JSON.stringify(submission), {
+    expirationTtl: 90 * 24 * 60 * 60,
+  });
+
+  return json(submission);
+}
+
+// ── DEBUG: direct KV test ──────────────────────────────────
+// REMOVE IN PRODUCTION
+async function handleDebugKV(key: string, env: Env): Promise<Response> {
+  const val = await env.SUBMISSIONS.get(key, "text");
+  return json({ key, found: val !== null, length: val?.length });
 }
