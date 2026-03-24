@@ -11,7 +11,6 @@ Pricing:
   - FX: Live GBP/JPY rate
   - Cash buy: 77% of reference GBP price
   - Credit buy: 88% of reference GBP price
-  - MINT bonus: +15% on both cash and credit prices
 """
 
 import json
@@ -29,7 +28,6 @@ SET_PREFIXES = [f"OP{str(i).zfill(2)}" for i in range(1, 16)]
 
 CASH_RATE = 0.77
 CREDIT_RATE = 0.88
-MINT_BONUS = 0.15
 FALLBACK_DISCOUNT = 0.85  # if no A- price, use 85% of wholesale base GBP
 
 SET_NAMES = {
@@ -84,7 +82,6 @@ def build_buylist():
     # 2. Load raw A- prices (keyed by cardNumber + parallel flag)
     print("\n[2/5] Loading raw A- prices...")
     a_minus_prices = {}  # key: "OP01|OP01-001|False" → jpy price
-    mint_prices = {}
 
     for prefix in SET_PREFIXES:
         filepath = find_latest(RAW_DIR, prefix)
@@ -102,11 +99,8 @@ def build_buylist():
             jpy = card.get("priceJpy", 0)
             if cond == "状態A-" and jpy > 0:
                 a_minus_prices[key] = jpy
-            elif cond is None and jpy > 0:
-                mint_prices[key] = jpy
 
     print(f"  A- prices loaded: {len(a_minus_prices)}")
-    print(f"  Mint prices loaded: {len(mint_prices)}")
 
     # 3. Load wholesale data (primary source for card info)
     print("\n[3/5] Loading wholesale card data...")
@@ -154,11 +148,6 @@ def build_buylist():
             if cash_price < 2.20:
                 continue
 
-            # MINT bonus
-            has_mint = key in mint_prices or price_source == "wholesale"
-            mint_cash = round_price(ref_gbp * CASH_RATE * (1 + MINT_BONUS)) if has_mint else None
-            mint_credit = round_price(ref_gbp * CREDIT_RATE * (1 + MINT_BONUS)) if has_mint else None
-
             # Clean name
             name = card.get("name", "")
             name = name.replace("〔状態A-〕", "").strip()
@@ -183,8 +172,6 @@ def build_buylist():
                 "priceSource": price_source,
                 "cashPrice": cash_price,
                 "creditPrice": credit_price,
-                "mintCashPrice": mint_cash,
-                "mintCreditPrice": mint_credit,
                 "imageUrl": s3_image_url,
                 "imageFallback": card.get("imageUrl", ""),  # CardRush URL as fallback
                 "cardrushUrl": card.get("cardrushUrl", ""),
@@ -219,8 +206,6 @@ def build_buylist():
             "source": "CardRush A- condition (primary) + wholesale base (fallback)",
             "cashRate": CASH_RATE,
             "creditRate": CREDIT_RATE,
-            "mintBonus": MINT_BONUS,
-            "note": "Cash = 77% of ref GBP, Credit = 88% of ref GBP, MINT = +15% bonus"
         },
         "stats": {
             "totalCards": len(all_cards),
@@ -244,7 +229,6 @@ def build_buylist():
     print(f"  File size: {os.path.getsize(output_path) / 1024:.1f} KB")
     print(f"\n  Sample prices:")
     for c in all_cards[:5]:
-        mint = f" | MINT: £{c['mintCashPrice']:.2f}/£{c['mintCreditPrice']:.2f}" if c.get("mintCashPrice") else ""
         src = "A-" if c["priceSource"] == "a-minus" else "WS"
         print(f"    {c['sku']:30s} {c['name'][:25]:25s} [{src}] Cash: £{c['cashPrice']:.2f} | Credit: £{c['creditPrice']:.2f}{mint}")
 

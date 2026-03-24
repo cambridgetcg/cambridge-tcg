@@ -331,6 +331,22 @@ def main():
 
         print(f"{'[DRY] ' if args.dry_run else ''}Mode: {args.mode} | {len(cards)} card numbers | {args.workers} workers\n")
 
+        # Skip card numbers where canonical base SKU already in manifest
+        def already_done(cn: str) -> bool:
+            parts = cn.split('-')
+            set_code = parts[0]
+            if cn.startswith('P-'):
+                base = f"P-{parts[1]}-JP"
+            else:
+                base = f"OP-{cn}-JP"
+            return base in manifest
+
+        cards_todo = [cn for cn in cards if not already_done(cn)]
+        skipped = len(cards) - len(cards_todo)
+        if skipped:
+            print(f"  Skipping {skipped} already-completed card numbers")
+        cards = cards_todo
+
         done = 0
         new = 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as ex:

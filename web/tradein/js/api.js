@@ -55,8 +55,6 @@ const BuyListAPI = {
           is_parallel: c.isParallel,
           cash_price: c.cashPrice,
           credit_price: c.creditPrice,
-          mint_cash_price: c.mintCashPrice,
-          mint_credit_price: c.mintCreditPrice,
           cash_want: 99, // always buying for trade-in
           credit_want: 99,
           image_url: c.imageUrl,
