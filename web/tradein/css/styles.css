@@ -733,9 +733,17 @@ h2.page-title, .page-title {
   .summary-card__value { font-size: 22px; }
 
   .catalog-table .col-set,
-  .catalog-table .col-credit-want,
-  .catalog-table .col-thumb {
+  .catalog-table .col-credit-want {
     display: none;
+  }
+
+  /* Keep thumbnails on mobile but smaller */
+  .col-thumb {
+    width: 36px;
+    padding: 3px 4px !important;
+  }
+  .card-thumb {
+    width: 32px;
   }
 
   .site-header__inner { flex-direction: column; gap: 4px; }
