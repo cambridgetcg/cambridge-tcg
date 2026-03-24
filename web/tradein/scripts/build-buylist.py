@@ -150,8 +150,8 @@ def build_buylist():
             cash_price = round_price(ref_gbp * CASH_RATE)
             credit_price = round_price(ref_gbp * CREDIT_RATE)
 
-            # Skip sub-£0.05 cards
-            if cash_price < 0.05:
+            # Skip cards below minimum cash threshold
+            if cash_price < 2.20:
                 continue
 
             # MINT bonus
