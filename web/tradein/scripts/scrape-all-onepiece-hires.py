@@ -10,6 +10,25 @@ and extract the high-res image. Skips SKUs already uploaded.
 
 Usage:
   python3 scrape-all-onepiece-hires.py [--workers N] [--limit N] [--dry-run]
+
+─────────────────────────────────────────────────────────────────────────────
+⚠️  HIRES IMAGE PROTECTION — DO NOT MODIFY WITHOUT READING THIS ⚠️
+
+These are the authoritative hi-res card images (100–200KB each, scraped from
+Cardrush product pages). They are the SOURCE OF TRUTH for wholesaletcgdirect.com.
+
+RULES:
+ 1. already_uploaded() checks S3 before every write — existing keys are NEVER
+    overwritten. This is intentional and must not be removed.
+ 2. The hires-manifest.json tracks all uploaded SKU→URL mappings. Keep it.
+ 3. The wholesale DB image_url column is restored from this manifest. The scraper
+    in tcg-wholesale uses a CASE guard to never overwrite hires/ URLs.
+ 4. S3 key format: hires/{SET_CODE}/{SKU}.jpg — must stay in sync with
+    tcg-wholesale/tools/lib/s3-images.ts s3Key() function.
+
+To restore DB image_url from manifest (e.g. after accidental overwrite):
+  python3 scrape-all-onepiece-hires.py --restore-db-only
+─────────────────────────────────────────────────────────────────────────────
 """
 
 import os, re, sys, time, json, argparse, subprocess, tempfile
@@ -143,7 +162,29 @@ def main():
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--restore-db-only", action="store_true",
+                        help="Restore image_url in DB from manifest without re-scraping S3")
     args = parser.parse_args()
+
+    # ── Fast DB restore from manifest ────────────────────────────────────────
+    if args.restore_db_only:
+        if not MANIFEST.exists():
+            print("ERROR: hires-manifest.json not found. Cannot restore.")
+            return
+        manifest = json.loads(MANIFEST.read_text())
+        print(f"Restoring {len(manifest)} image_url entries from manifest…")
+        import tempfile, os
+        rows = ", ".join(f"('{k.replace(chr(39), chr(39)*2)}', '{v.replace(chr(39), chr(39)*2)}')"
+                         for k, v in manifest.items())
+        sql = f"UPDATE cards SET image_url = v.url FROM (VALUES {rows}) AS v(sku, url) WHERE cards.sku = v.sku;"
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as f:
+            f.write(sql); tmpfile = f.name
+        r = subprocess.run(["psql", DB_URL, "-f", tmpfile], capture_output=True, text=True, timeout=60)
+        os.unlink(tmpfile)
+        print(r.stdout.strip() or "Done")
+        if r.returncode != 0:
+            print("STDERR:", r.stderr.strip()[:300])
+        return
 
     print("Loading SKUs from wholesale DB...")
     all_skus = load_wholesale_skus()
