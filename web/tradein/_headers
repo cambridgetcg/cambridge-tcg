@@ -1,7 +1,0 @@
-# Force revalidation on every request for JS/CSS assets.
-# Cloudflare edge still serves fast via ETag, but never stale after a deploy.
-/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/css/*
-  Cache-Control: public, max-age=0, must-revalidate
