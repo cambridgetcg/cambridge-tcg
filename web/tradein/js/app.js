@@ -486,12 +486,12 @@ function renderSubmitForm(container) {
 
     var cartItems = Cart.items();
     var data = {
-      customer_name: document.getElementById('ti-name').value.trim(),
-      customer_email: document.getElementById('ti-email').value.trim(),
-      customer_phone: document.getElementById('ti-phone').value.trim(),
-      payment_method: document.querySelector('input[name="payment"]:checked').value,
-      delivery_method: document.querySelector('input[name="delivery"]:checked').value,
-      is_over_18: document.getElementById('ti-age').checked,
+      customerName: document.getElementById('ti-name').value.trim(),
+      customerEmail: document.getElementById('ti-email').value.trim(),
+      customerPhone: document.getElementById('ti-phone').value.trim(),
+      paymentMethod: document.querySelector('input[name="payment"]:checked').value,
+      deliveryMethod: document.querySelector('input[name="delivery"]:checked').value,
+      isOver18: document.getElementById('ti-age').checked,
       notes: document.getElementById('ti-notes').value.trim(),
       website: document.getElementById('ti-website').value,
       items: cartItems.map(function(item) {
@@ -502,8 +502,8 @@ function renderSubmitForm(container) {
     try {
       var result = await BuyListAPI.submitTradeIn(data);
       lastConfirmation = result;
-      lastConfirmation._customerName = data.customer_name;
-      lastConfirmation._customerEmail = data.customer_email;
+      lastConfirmation._customerName = data.customerName;
+      lastConfirmation._customerEmail = data.customerEmail;
       lastConfirmation._items = cartItems;
       try { sessionStorage.setItem('ctcg_last_confirm', JSON.stringify(lastConfirmation)); } catch(e) {}
       Cart.clear();
@@ -538,17 +538,17 @@ function renderConfirmation(container, reference) {
 
   if (lastConfirmation && lastConfirmation.reference === reference) {
     var c = lastConfirmation;
-    var chosenTotal = c.payment_method === 'credit' ? c.quoted_credit_total : c.quoted_cash_total;
-    var paymentLabel = c.payment_method === 'credit' ? 'Store Credit' : 'Cash (bank transfer)';
-    var deliveryLabel = c.delivery_method === 'mail' ? 'Mail-in' : 'In-store drop-off';
+    var chosenTotal = c.paymentMethod === 'credit' ? c.quotedCreditTotal : c.quotedCashTotal;
+    var paymentLabel = c.paymentMethod === 'credit' ? 'Store Credit' : 'Cash (bank transfer)';
+    var deliveryLabel = c.deliveryMethod === 'mail' ? 'Mail-in' : 'In-store drop-off';
 
     html += '<div class="confirm-details">';
     html += '<div class="confirm-row"><span class="confirm-label">Reference</span><span class="confirm-value">' + reference + '</span></div>';
-    html += '<div class="confirm-row"><span class="confirm-label">Items</span><span class="confirm-value">' + c.item_count + ' cards</span></div>';
+    html += '<div class="confirm-row"><span class="confirm-label">Items</span><span class="confirm-value">' + c.itemCount + ' cards</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Payment</span><span class="confirm-value">' + paymentLabel + '</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Total (NM)</span><span class="confirm-value confirm-total">\u00a3' + chosenTotal.toFixed(2) + '</span></div>';
     html += '<div class="confirm-row"><span class="confirm-label">Delivery</span><span class="confirm-value">' + deliveryLabel + '</span></div>';
-    html += '<div class="confirm-row"><span class="confirm-label">Quote Valid Until</span><span class="confirm-value">' + formatDate(c.expires_at) + '</span></div>';
+    html += '<div class="confirm-row"><span class="confirm-label">Quote Valid Until</span><span class="confirm-value">' + formatDate(c.quoteExpiresAt) + '</span></div>';
     html += '</div>';
 
     // Items list
@@ -571,14 +571,14 @@ function renderConfirmation(container, reference) {
 
     // Instructions
     html += '<div class="confirm-instructions">';
-    if (c.delivery_method === 'mail') {
+    if (c.deliveryMethod === 'mail') {
       html += '<h3>What\u2019s Next</h3>';
       html += '<ol>';
       html += '<li>Pack your cards carefully (sleeved, in toploaders, rigid mailer)</li>';
       html += '<li>Ship to: <strong>Cambridge TCG, Cambridge, UK</strong></li>';
       html += '<li>Use tracked delivery (Royal Mail Tracked 48 recommended)</li>';
       html += '<li>Email us your tracking number at <a href="mailto:contact@cambridgetcg.com">contact@cambridgetcg.com</a> with reference <strong>' + reference + '</strong></li>';
-      html += '<li>Prices are locked for 7 days \u2014 cards must arrive by <strong>' + formatDate(c.expires_at) + '</strong></li>';
+      html += '<li>Prices are locked for 7 days \u2014 cards must arrive by <strong>' + formatDate(c.quoteExpiresAt) + '</strong></li>';
       html += '</ol>';
     } else {
       html += '<h3>What\u2019s Next</h3>';
@@ -725,15 +725,23 @@ function renderStatusCheck(container) {
 function renderStatusResult(container, data) {
   var statusLabels = {
     'submitted': 'Submitted',
+    'shipped': 'Shipped',
     'received': 'Cards Received',
+    'grading': 'Being Graded',
+    'accepted': 'Accepted',
+    'discrepancy': 'Discrepancy Found',
+    'waiting_customer': 'Awaiting Your Response',
     'paid': 'Payment Issued',
+    'completed': 'Completed',
     'cancelled': 'Cancelled',
+    'expired': 'Quote Expired',
+    'returned': 'Cards Returned',
   };
   var statusClass = 'status-' + data.status;
   var statusLabel = statusLabels[data.status] || data.status;
-  var chosenTotal = data.chosen_total;
-  var paymentLabel = data.payment_method === 'credit' ? 'Store Credit' : 'Cash (bank transfer)';
-  var deliveryLabel = data.delivery_method === 'mail' ? 'Mail-in' : 'In-store drop-off';
+  var chosenTotal = data.selectedTotal;
+  var paymentLabel = data.paymentMethod === 'credit' ? 'Store Credit' : 'Cash (bank transfer)';
+  var deliveryLabel = data.deliveryMethod === 'mail' ? 'Mail-in' : 'In-store drop-off';
 
   var html = '';
   html += '<div class="status-result">';
@@ -745,17 +753,17 @@ function renderStatusResult(container, data) {
   html += '<div class="confirm-details">';
   html += '<div class="confirm-row"><span class="confirm-label">Reference</span><span class="confirm-value">' + data.reference + '</span></div>';
   html += '<div class="confirm-row"><span class="confirm-label">Status</span><span class="confirm-value"><span class="status-badge ' + statusClass + '">' + statusLabel + '</span></span></div>';
-  html += '<div class="confirm-row"><span class="confirm-label">Submitted</span><span class="confirm-value">' + formatDate(data.submitted_at) + '</span></div>';
+  html += '<div class="confirm-row"><span class="confirm-label">Submitted</span><span class="confirm-value">' + formatDate(data.createdAt) + '</span></div>';
   html += '<div class="confirm-row"><span class="confirm-label">Payment</span><span class="confirm-value">' + paymentLabel + '</span></div>';
   html += '<div class="confirm-row"><span class="confirm-label">Total</span><span class="confirm-value confirm-total">\u00a3' + chosenTotal.toFixed(2) + '</span></div>';
   html += '<div class="confirm-row"><span class="confirm-label">Delivery</span><span class="confirm-value">' + deliveryLabel + '</span></div>';
-  html += '<div class="confirm-row"><span class="confirm-label">Quote Valid Until</span><span class="confirm-value">' + formatDate(data.expires_at) + '</span></div>';
+  html += '<div class="confirm-row"><span class="confirm-label">Quote Valid Until</span><span class="confirm-value">' + formatDate(data.quoteExpiresAt) + '</span></div>';
 
-  if (data.tracking_number) {
-    html += '<div class="confirm-row"><span class="confirm-label">Tracking</span><span class="confirm-value">' + data.tracking_number + '</span></div>';
+  if (data.trackingNumber) {
+    html += '<div class="confirm-row"><span class="confirm-label">Tracking</span><span class="confirm-value">' + data.trackingNumber + '</span></div>';
   }
-  if (data.payment_reference) {
-    html += '<div class="confirm-row"><span class="confirm-label">Payment Ref</span><span class="confirm-value">' + data.payment_reference + '</span></div>';
+  if (data.paymentReference) {
+    html += '<div class="confirm-row"><span class="confirm-label">Payment Ref</span><span class="confirm-value">' + data.paymentReference + '</span></div>';
   }
 
   html += '</div>';
@@ -771,8 +779,8 @@ function renderStatusResult(container, data) {
       html += '<tr>';
       html += '<td>' + formatSkuShort(item.sku) + '</td>';
       html += '<td>' + item.quantity + '</td>';
-      html += '<td>\u00a3' + item.cash_price.toFixed(2) + '</td>';
-      html += '<td class="credit-price">\u00a3' + item.credit_price.toFixed(2) + '</td>';
+      html += '<td>\u00a3' + item.cashUnitPrice.toFixed(2) + '</td>';
+      html += '<td class="credit-price">\u00a3' + item.creditUnitPrice.toFixed(2) + '</td>';
       html += '</tr>';
     }
     html += '</tbody></table>';
