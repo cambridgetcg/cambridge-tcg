@@ -157,6 +157,11 @@ interface TradeInRequest {
 async function handleSubmitTradeIn(request: Request, env: Env): Promise<Response> {
   const body: TradeInRequest = await request.json();
 
+  // Honeypot check — bots fill hidden fields
+  if ((body as any).website) {
+    return json({ error: "Submission rejected" }, 400);
+  }
+
   // Validate required fields
   if (!body.customerName?.trim()) return json({ error: "Name is required" }, 400);
   if (!body.customerEmail?.trim()) return json({ error: "Email is required" }, 400);
