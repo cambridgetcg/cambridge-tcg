@@ -47,6 +47,7 @@ window.addEventListener('hashchange', route);
 document.addEventListener('DOMContentLoaded', async function() {
   try {
     buylistData = await BuyListAPI.getBuyList();
+    Cart.validate(); // purge stale/malformed items from previous versions
     Cart.updateBadge();
     route();
   } catch (err) {
@@ -348,40 +349,45 @@ function renderCart(container) {
 
   container.innerHTML = html;
 
-  // Events
-  container.addEventListener('click', function(e) {
-    var qtyBtn = e.target.closest('.qty-btn');
-    if (qtyBtn) {
-      var sku = qtyBtn.getAttribute('data-sku');
-      var action = qtyBtn.getAttribute('data-action');
-      var cart = Cart.get();
-      if (cart[sku]) {
-        var newQty = cart[sku].qty + (action === 'inc' ? 1 : -1);
-        Cart.updateQty(sku, newQty);
+  // Events — use named handler to prevent duplicate listeners (renderCart is
+  // called recursively on qty change / remove, and each call was previously
+  // stacking a new anonymous listener → qty jumps by 2, 3, 4… on repeat clicks)
+  if (!container._cartPageHandler) {
+    container._cartPageHandler = function(e) {
+      var qtyBtn = e.target.closest('.qty-btn');
+      if (qtyBtn) {
+        var sku = qtyBtn.getAttribute('data-sku');
+        var action = qtyBtn.getAttribute('data-action');
+        var cart = Cart.get();
+        if (cart[sku]) {
+          var newQty = cart[sku].qty + (action === 'inc' ? 1 : -1);
+          Cart.updateQty(sku, newQty);
+          renderCart(container);
+        }
+        return;
+      }
+
+      // Condition toggle (NM vs A-)
+      if (e.target.type === 'radio' && e.target.getAttribute('data-sku')) {
+        Cart.setCondition(e.target.getAttribute('data-sku'), e.target.value);
+        renderCart(container);
+        return;
+      }
+
+      var removeBtn = e.target.closest('.btn-remove');
+      if (removeBtn) {
+        Cart.remove(removeBtn.getAttribute('data-sku'));
+        renderCart(container);
+        return;
+      }
+
+      if (e.target.id === 'clear-cart') {
+        Cart.clear();
         renderCart(container);
       }
-      return;
-    }
-
-    // Condition toggle (NM vs A-)
-    if (e.target.type === 'radio' && e.target.getAttribute('data-sku')) {
-      Cart.setCondition(e.target.getAttribute('data-sku'), e.target.value);
-      renderCart(container);
-      return;
-    }
-
-    var removeBtn = e.target.closest('.btn-remove');
-    if (removeBtn) {
-      Cart.remove(removeBtn.getAttribute('data-sku'));
-      renderCart(container);
-      return;
-    }
-
-    if (e.target.id === 'clear-cart') {
-      Cart.clear();
-      renderCart(container);
-    }
-  });
+    };
+    container.addEventListener('click', container._cartPageHandler);
+  }
 }
 
 
@@ -460,6 +466,9 @@ function renderSubmitForm(container) {
   html += '<input type="text" id="ti-website" name="website" tabindex="-1" autocomplete="off">';
   html += '</div>';
 
+  // Error display (above button so it's always visible)
+  html += '<div id="form-error" class="form-error" style="display:none"></div>';
+
   // Submit
   html += '<div class="form-actions">';
   html += '<a href="#/cart" class="btn btn-muted">\u2190 Back to Cart</a>';
@@ -468,26 +477,48 @@ function renderSubmitForm(container) {
 
   html += '<p class="form-note">By submitting, you agree to our <a href="#/terms">trade-in terms</a>.</p>';
 
-  html += '<div id="form-error" class="error-msg" style="display:none"></div>';
-
   html += '</form>';
 
   container.innerHTML = html;
 
-  // Form submit handler
-  document.getElementById('tradein-form').addEventListener('submit', async function(e) {
+  // Form submit handler — use 'click' on the button so we always run (even if
+  // browser native required-checkbox validation is inconsistent across Safari/FF).
+  // We do our own validation and show clear, visible error messages.
+  document.getElementById('submit-btn').addEventListener('click', async function(e) {
     e.preventDefault();
 
     var submitBtn = document.getElementById('submit-btn');
     var errorDiv = document.getElementById('form-error');
     errorDiv.style.display = 'none';
+
+    // ── Client-side validation ──────────────────────────────
+    var errors = [];
+    var nameVal = document.getElementById('ti-name').value.trim();
+    var emailVal = document.getElementById('ti-email').value.trim();
+
+    if (!nameVal) errors.push('Full name is required.');
+    if (!emailVal) errors.push('Email is required.');
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) errors.push('Please enter a valid email address.');
+    if (!document.getElementById('ti-condition').checked) errors.push('Please confirm all cards are Near Mint.');
+    if (!document.getElementById('ti-age').checked) errors.push('Please confirm the age declaration.');
+
+    var cartItems = Cart.items();
+    if (cartItems.length === 0) errors.push('Your cart is empty.');
+
+    if (errors.length > 0) {
+      errorDiv.innerHTML = errors.join('<br>');
+      errorDiv.style.display = '';
+      errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // ── Submit ──────────────────────────────────────────────
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submitting\u2026';
 
-    var cartItems = Cart.items();
     var data = {
-      customerName: document.getElementById('ti-name').value.trim(),
-      customerEmail: document.getElementById('ti-email').value.trim(),
+      customerName: nameVal,
+      customerEmail: emailVal,
       customerPhone: document.getElementById('ti-phone').value.trim(),
       paymentMethod: document.querySelector('input[name="payment"]:checked').value,
       deliveryMethod: document.querySelector('input[name="delivery"]:checked').value,
@@ -505,12 +536,13 @@ function renderSubmitForm(container) {
       lastConfirmation._customerName = data.customerName;
       lastConfirmation._customerEmail = data.customerEmail;
       lastConfirmation._items = cartItems;
-      try { sessionStorage.setItem('ctcg_last_confirm', JSON.stringify(lastConfirmation)); } catch(e) {}
+      try { sessionStorage.setItem('ctcg_last_confirm', JSON.stringify(lastConfirmation)); } catch(storeErr) {}
       Cart.clear();
       location.hash = '#/confirm/' + result.reference;
     } catch (err) {
-      errorDiv.textContent = err.message;
+      errorDiv.textContent = err.message || 'Submission failed. Please try again.';
       errorDiv.style.display = '';
+      errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
       submitBtn.disabled = false;
       submitBtn.textContent = 'Submit Trade-In';
     }

@@ -14,6 +14,31 @@ var Cart = {
     Cart.updateBadge();
   },
 
+  /**
+   * Validate cart items — remove any with missing/invalid price data.
+   * Protects against stale localStorage from previous code versions.
+   * Returns true if cart was clean, false if items were purged.
+   */
+  validate: function() {
+    var cart = Cart.get();
+    var purged = 0;
+    for (var key in cart) {
+      var item = cart[key];
+      if (typeof item.cash_price !== 'number' || isNaN(item.cash_price) ||
+          typeof item.credit_price !== 'number' || isNaN(item.credit_price) ||
+          typeof item.qty !== 'number' || item.qty < 1 ||
+          !item.sku) {
+        delete cart[key];
+        purged++;
+      }
+    }
+    if (purged > 0) {
+      Cart.set(cart);
+      console.warn('[Cart] Purged ' + purged + ' invalid item(s) from localStorage');
+    }
+    return purged === 0;
+  },
+
   add: function(item) {
     var cart = Cart.get();
     var key = item.sku;
